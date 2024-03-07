@@ -3,10 +3,8 @@
 namespace Codelicious\Coda\Statements;
 
 use Codelicious\Coda\Values\SepaDirectDebit;
-use DateTime;
 
 /**
- * @package Codelicious\Coda
  * @author Wim Verstuyf (wim.verstuyf@codelicious.be)
  * @license http://opensource.org/licenses/GPL-2.0 GPL-2.0
  */
@@ -19,10 +17,12 @@ class Transaction
     /** @var int */
     private $transactionSequence;
     /** @var int */
-    private $transactionSequenceDetail;
-    /** @var DateTime */
+    private $transactionDetailSequence;
+    /** @var int */
+    private $transactionCodeType;
+    /** @var \DateTime */
     private $transactionDate;
-    /** @var DateTime */
+    /** @var \DateTime */
     private $valutaDate;
     /** @var float */
     private $amount;
@@ -32,45 +32,33 @@ class Transaction
     private $structuredMessage;
     /** @var SepaDirectDebit|null */
     private $sepaDirectDebit;
-    /** @var TransactionCode|null */
-   	private $transactionCode;
+    /** @var Transaction[] */
+    private $transactionDetail = [];
 
-    /**
-     * @param AccountOtherParty $account
-     * @param int $statementSequence
-     * @param int $transactionSequence
-     * @param DateTime $transactionDate
-     * @param DateTime $valutaDate
-     * @param float $amount
-     * @param string $message
-     * @param string $structuredMessage
-     * @param SepaDirectDebit|null $sepaDirectDebit
-     */
     public function __construct(
         AccountOtherParty $account,
         int $statementSequence,
         int $transactionSequence,
-        int $transactionSequenceDetail,
-        DateTime $transactionDate,
-        DateTime $valutaDate,
+        int $transactionDetailSequence,
+        int $transactionCodeType,
+        \DateTime $transactionDate,
+        \DateTime $valutaDate,
         float $amount,
         string $message,
         string $structuredMessage,
-        $sepaDirectDebit,
-        TransactionCode $transactionCode
-    )
-    {
+        ?SepaDirectDebit $sepaDirectDebit
+    ) {
         $this->account = $account;
         $this->statementSequence = $statementSequence;
         $this->transactionSequence = $transactionSequence;
-        $this->transactionSequenceDetail = $transactionSequenceDetail;
+        $this->transactionDetailSequence = $transactionDetailSequence;
+        $this->transactionCodeType = $transactionCodeType;
         $this->transactionDate = $transactionDate;
         $this->valutaDate = $valutaDate;
         $this->amount = $amount;
         $this->message = $message;
         $this->structuredMessage = $structuredMessage;
         $this->sepaDirectDebit = $sepaDirectDebit;
-        $this->transactionCode = $transactionCode;
     }
 
     public function getAccount(): AccountOtherParty
@@ -78,12 +66,12 @@ class Transaction
         return $this->account;
     }
 
-    public function getTransactionDate(): DateTime
+    public function getTransactionDate(): \DateTime
     {
         return $this->transactionDate;
     }
 
-    public function getValutaDate(): DateTime
+    public function getValutaDate(): \DateTime
     {
         return $this->valutaDate;
     }
@@ -111,35 +99,28 @@ class Transaction
         return $this->sepaDirectDebit;
     }
 
-    /**
-     * @return int
-     */
     public function getStatementSequence(): int
     {
         return $this->statementSequence;
     }
 
-    /**
-     * @return int
-     */
     public function getTransactionSequence(): int
     {
         return $this->transactionSequence;
     }
 
-    /**
-     * @return int
-     */
-    public function getTransactionSequenceDetail(): int
+    public function getTransactionDetailSequence(): int
     {
-        return $this->transactionSequenceDetail;
+        return $this->transactionDetailSequence;
     }
 
-    /**
-     * @return TransactionCode
-     */
-    public function getTransactionCode(): TransactionCode
+    public function getTransactionCodeType(): int
     {
-        return $this->transactionCode;
+        return $this->transactionCodeType;
+    }
+
+    public function addTransactionDetail(Transaction $transactionDetail): void
+    {
+        $this->transactionDetail[] = $transactionDetail;
     }
 }

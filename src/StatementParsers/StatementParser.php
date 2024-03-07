@@ -2,8 +2,6 @@
 
 namespace Codelicious\Coda\StatementParsers;
 
-use function Codelicious\Coda\Helpers\filterLinesOfTypes;
-use function Codelicious\Coda\Helpers\getFirstLineOfType;
 use Codelicious\Coda\Lines\IdentificationLine;
 use Codelicious\Coda\Lines\InformationPart1Line;
 use Codelicious\Coda\Lines\InformationPart2Line;
@@ -16,132 +14,155 @@ use Codelicious\Coda\Lines\TransactionPart1Line;
 use Codelicious\Coda\Lines\TransactionPart2Line;
 use Codelicious\Coda\Lines\TransactionPart3Line;
 use Codelicious\Coda\Statements\Statement;
-use DateTime;
+use Codelicious\Coda\Statements\Transaction;
+
+use function Codelicious\Coda\Helpers\filterLinesOfTypes;
+use function Codelicious\Coda\Helpers\getFirstLineOfType;
 
 /**
- * @package Codelicious\Coda
  * @author Wim Verstuyf (wim.verstuyf@codelicious.be)
  * @license http://opensource.org/licenses/GPL-2.0 GPL-2.0
  */
 class StatementParser
 {
-	/**
-	 * @param LineInterface[] $lines
-	 * @return Statement
-	 */
-	public function parse(array $lines): Statement
-	{
-		$date = new DateTime("0001-01-01");
-		/** @var IdentificationLine $identificationLine */
-		$identificationLine = getFirstLineOfType($lines, new LineType(LineType::Identification));
-		if ($identificationLine) {
-			$date = $identificationLine->getCreationDate()->getValue();
-		}
+    /**
+     * @param LineInterface[] $lines
+     */
+    public function parse(array $lines): Statement
+    {
+        $date = new \DateTime('0001-01-01');
+        /** @var IdentificationLine $identificationLine */
+        $identificationLine = getFirstLineOfType($lines, new LineType(LineType::Identification));
+        if ($identificationLine) {
+            $date = $identificationLine->getCreationDate()->getValue();
+        }
 
-		$initialBalance = 0.0;
-		$sequenceNumber = 0;
-		/** @var InitialStateLine $initialStateLine */
-		$initialStateLine = getFirstLineOfType($lines, new LineType(LineType::InitialState));
+        $initialBalance = 0.0;
+        /** @var InitialStateLine $initialStateLine */
+        $initialStateLine = getFirstLineOfType($lines, new LineType(LineType::InitialState));
+        if ($initialStateLine) {
+            $initialBalance = $initialStateLine->getBalance()->getValue();
+        }
 
-		if ($initialStateLine) {
-			$initialBalance = $initialStateLine->getBalance()->getValue();
-			$sequenceNumber = $initialStateLine->getStatementSequenceNumber()->getValue();
-		}
+        $newBalance = 0.0;
+        /** @var NewStateLine $newStateLine */
+        $newStateLine = getFirstLineOfType($lines, new LineType(LineType::NewState));
+        if ($newStateLine) {
+            $newBalance = $newStateLine->getBalance()->getValue();
+        }
 
+        $messageParser = new MessageParser();
+        $informationalMessage = $messageParser->parse(
+            filterLinesOfTypes(
+                $lines,
+                [
+                    new LineType(LineType::Message),
+                ]
+            )
+        );
 
-		$newBalance = 0.0;
-		$newDate = new DateTime("0001-01-01");
-		/** @var NewStateLine $newStateLine */
-		$newStateLine = getFirstLineOfType($lines, new LineType(LineType::NewState));
-		if ($newStateLine) {
-			$newBalance = $newStateLine->getBalance()->getValue();
-			$newDate = $newStateLine->getDate()->getValue();
-		}
+        $accountParser = new AccountParser();
+        $account = $accountParser->parse(
+            filterLinesOfTypes(
+                $lines,
+                [
+                    new LineType(LineType::Identification),
+                    new LineType(LineType::InitialState),
+                ]
+            )
+        );
 
-		$messageParser = new MessageParser();
-		$informationalMessage = $messageParser->parse(
-			filterLinesOfTypes(
-				$lines,
-				[
-					new LineType(LineType::Message)
-				]
-			)
-		);
+        $transactionLines = $this->groupTransactions(
+            filterLinesOfTypes(
+                $lines,
+                [
+                    new LineType(LineType::TransactionPart1),
+                    new LineType(LineType::TransactionPart2),
+                    new LineType(LineType::TransactionPart3),
+                    new LineType(LineType::InformationPart1),
+                    new LineType(LineType::InformationPart2),
+                    new LineType(LineType::InformationPart3),
+                ]
+            )
+        );
 
-		$accountParser = new AccountParser();
-		$account = $accountParser->parse(
-			filterLinesOfTypes(
-				$lines,
-				[
-					new LineType(LineType::Identification),
-					new LineType(LineType::InitialState)
-				]
-			)
-		);
+        $transactionParser = new TransactionParser();
+        $transactions = array_map(
+            function (array $lines) use ($transactionParser) {
+                return $transactionParser->parse($lines);
+            },
+            $transactionLines
+        );
 
-		$transactionLines = $this->groupTransactions(
-			filterLinesOfTypes(
-				$lines,
-				[
-					new LineType(LineType::TransactionPart1),
-					new LineType(LineType::TransactionPart2),
-					new LineType(LineType::TransactionPart3),
-					new LineType(LineType::InformationPart1),
-					new LineType(LineType::InformationPart2),
-					new LineType(LineType::InformationPart3)
-				]
-			)
-		);
+        $transactions = $this->getTransactionTree($transactions);
 
-		$transactionParser = new TransactionParser();
-		$transactions = array_map(
-			function(array $lines) use ($transactionParser) {
-				return $transactionParser->parse($lines);
-			}, $transactionParser->filter($transactionLines));
+        return new Statement(
+            $date,
+            $account,
+            $initialBalance,
+            $newBalance,
+            $informationalMessage,
+            $transactions
+        );
+    }
 
-		return new Statement(
-			$date,
-			$account,
-			$sequenceNumber,
-			$initialBalance,
-			$newBalance,
-			$newDate,
-			$informationalMessage,
-			$transactions
-		);
-	}
+    /**
+     * @param LineInterface[] $lines
+     *
+     * @return LineInterface[][]
+     */
+    private function groupTransactions(array $lines): array
+    {
+        $transactions = [];
+        $transactionDetails = [];
+        $idx = -1;
+        $endTransaction = false;
 
-	/**
-	 * @param LineInterface[] $lines
-	 * @return LineInterface[][]
-	 */
-	private function groupTransactions(array $lines): array
-	{
-		$transactions = [];
-		$idx = -1;
-		$sequenceNumber = -1;
-		$sequenceNumberDetail = -1;
+        foreach ($lines as $line) {
+            /** @var TransactionPart1Line|TransactionPart2Line|TransactionPart3Line|InformationPart1Line|InformationPart2Line|InformationPart3Line $transactionOrInformationLine */
+            $transactionOrInformationLine = $line;
 
-		foreach ($lines as $line) {
-			/** @var TransactionPart1Line|TransactionPart2Line|TransactionPart3Line|InformationPart1Line|InformationPart2Line|InformationPart3Line $transactionOrInformationLine */
-			$transactionOrInformationLine = $line;
-			$isCollectiveTransaction = method_exists($transactionOrInformationLine, 'getTransactionCode') && $transactionOrInformationLine->getTransactionCode()->getOperation()->getValue() === '07';
+            if (!$transactions
+                || $endTransaction
+            ) {
+                ++$idx;
+                $transactions[$idx] = [];
+                $endTransaction = false;
+            }
 
-			if (
-				!$transactions
-				|| $sequenceNumber != $transactionOrInformationLine->getSequenceNumber()->getValue()
-				|| ($isCollectiveTransaction && $sequenceNumberDetail != $transactionOrInformationLine->getSequenceNumberDetail()->getValue())
-			) {
-				$sequenceNumber = $transactionOrInformationLine->getSequenceNumber()->getValue();
-				$sequenceNumberDetail = $transactionOrInformationLine->getSequenceNumberDetail()->getValue();
-				$idx += 1;
+            $transactions[$idx][] = $transactionOrInformationLine;
 
-				$transactions[$idx] = [];
-			}
+            if (0 == $transactionOrInformationLine->getNextCode()->getValue() && 0 == $transactionOrInformationLine->getLinkCode()->getValue()) {
+                $endTransaction = true;
+            }
+        }
 
-			$transactions[$idx][] = $transactionOrInformationLine;
-		}
+        return $transactions;
+    }
 
-		return $transactions;
-	}
+    /**
+     * @param Transaction[] $transactions
+     *
+     * @return Transaction[]
+     */
+    private function getTransactionTree(array $transactions): array
+    {
+        $previousTransactionId = -1;
+        $previousTransactionCodeType = -1;
+        foreach ($transactions as $idx => $transaction) {
+            if (9 == $transaction->getTransactionCodeType()) {
+                throw new \LogicException('transaction code type 9 is not yet implemented');
+            }
+            if ($transaction->getTransactionCodeType() >= 5 && $transaction->getTransactionCodeType() <= 8) {
+                $transactions[$previousTransactionId]->addTransactionDetail($transaction);
+                unset($transactions[$idx]);
+            }
+            if ($transaction->getTransactionCodeType() >= 0 && $transaction->getTransactionCodeType() <= 3) {
+                $previousTransactionId = $idx;
+                $previousTransactionCodeType = $transaction->getTransactionCodeType();
+            }
+        }
+
+        return $transactions;
+    }
 }

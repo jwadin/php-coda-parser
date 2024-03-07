@@ -10,7 +10,7 @@ class InformationPart3LineParserTest extends \PHPUnit\Framework\TestCase
     {
         $parser = new InformationPart3LineParser();
 
-        $sample = "3300010001SOME INFORMATION ABOUT THIS TRANSACTION                                                                            0 0";
+        $sample = '3300010001SOME INFORMATION ABOUT THIS TRANSACTION                                                                            0 0';
 
         $this->assertEquals(true, $parser->canAcceptString($sample));
 
@@ -18,6 +18,6 @@ class InformationPart3LineParserTest extends \PHPUnit\Framework\TestCase
 
         $this->assertEquals(1, $result->getSequenceNumber()->getValue());
         $this->assertEquals(1, $result->getSequenceNumberDetail()->getValue());
-        $this->assertEquals("SOME INFORMATION ABOUT THIS TRANSACTION ", $result->getMessage()->getValue());
+        $this->assertEquals('SOME INFORMATION ABOUT THIS TRANSACTION ', $result->getMessage()->getValue());
     }
 }

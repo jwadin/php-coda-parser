@@ -4,15 +4,15 @@ namespace Codelicious\Coda\Values;
 
 use function Codelicious\Coda\Helpers\validateStringLength;
 
-class ExternalApplicationCode
+class LinkCode
 {
     private string $value;
 
     public function __construct(string $value)
     {
-        validateStringLength($value, 5, 'ExternalApplicationCode');
+        validateStringLength($value, 1, 'LinkCode');
 
-        $this->value = trim($value);
+        $this->value = $value;
     }
 
     public function getValue(): string
