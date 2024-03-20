@@ -123,4 +123,9 @@ class Transaction
     {
         $this->transactionDetail[] = $transactionDetail;
     }
+
+    public function getSubTransactions(): array
+    {
+        return $this->transactionDetail;
+    }
 }
